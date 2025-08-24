@@ -60,11 +60,10 @@ class StudyViewModel: ViewModel() {
                 }else{
                     originalItems
                         .filter { studyTopic ->
-                            studyTopic.title.contains(searchText) ||
-                                    studyTopic.subjects.any { it.contains(searchText) }
+                            studyTopic.title.contains(searchText,ignoreCase = true) ||
+                                    studyTopic.subjects.any { it.contains(searchText,ignoreCase = true) }
                         }
                 }
-                Log.d("TAG", "observeSearchText: ${searchText} / ${newItems}")
                 _state.update { it.copy(
                     items = newItems
                 ) }
