@@ -16,11 +16,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHost
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import com.lihan.minichallenges2025may.scrollablestudyboard.CourseDetail
+import com.lihan.minichallenges2025may.scrollablestudyboard.LessonTopic
+import com.lihan.minichallenges2025may.scrollablestudyboard.ScrollableStudyBoard
+import com.lihan.minichallenges2025may.scrollablestudyboard.ScrollableStudyBoardAction
+import com.lihan.minichallenges2025may.scrollablestudyboard.ScrollableStudyBoardViewModel
 import com.lihan.minichallenges2025may.searchablestudylist.SearchableStudyList
 import com.lihan.minichallenges2025may.searchablestudylist.StudyViewModel
 import com.lihan.minichallenges2025may.studyfeedswitcher.StudyFeedSwitcher
 import com.lihan.minichallenges2025may.studyfeedswitcher.StudyFeedSwitcherViewModel
 import com.lihan.minichallenges2025may.ui.theme.MiniChallenges2025MayTheme
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+
+@Serializable
+data object StudyBoard
+
+@Serializable
+data class StudyBoardDetail(val lessonTopicString: String)
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,15 +49,44 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MiniChallenges2025MayTheme {
-                val viewModel by viewModels<StudyFeedSwitcherViewModel>()
-                val state by viewModel.state.collectAsStateWithLifecycle()
-                val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+                val navController = rememberNavController()
+                NavHost(
+                    navController = navController,
+                    startDestination = StudyBoard
+                ){
+                    composable<StudyBoard>{
+                        val viewModel by viewModels<ScrollableStudyBoardViewModel>()
+                        val state by viewModel.state.collectAsStateWithLifecycle()
+                        ScrollableStudyBoard(
+                            state = state,
+                            onAction = { action ->
+                                println("action ${action}")
+                                when(action){
+                                    is ScrollableStudyBoardAction.ToDetail -> {
+                                        println("action ToDetail ${action.lessonTopic}")
+                                        val lessonTopicString = Json.encodeToString(action.lessonTopic)
+                                        navController.navigate(StudyBoardDetail(lessonTopicString = lessonTopicString))
+                                    }
+                                    else -> Unit
+                                }
+                                viewModel.onAction(action)
+                            }
 
-                StudyFeedSwitcher(
-                    state = state,
-                    onAction = viewModel::onAction,
-                    isLandscape = isLandscape
-                )
+                        )
+
+                    }
+                    composable<StudyBoardDetail>{
+                        val lessonTopicString = it.toRoute<StudyBoardDetail>().lessonTopicString
+                        val lessonTopic = Json.decodeFromString<LessonTopic>(lessonTopicString)
+                        CourseDetail(
+                            title = lessonTopic.title,
+                            category = lessonTopic.category,
+                            onBackClick = {
+                                navController.navigateUp()
+                            }
+                        )
+                    }
+                }
             }
         }
     }

@@ -20,7 +20,7 @@ data class PillColor(
         fun getColor(text: String): PillColor {
             return when(text){
                 //Green
-                in listOf("History","Biology","Earth Science") -> PillColor(text = GreenPillTextColor, background = GreenPillBG)
+                in listOf("History","Biology","Earth Science","Science") -> PillColor(text = GreenPillTextColor, background = GreenPillBG)
                 //Pink
                 in listOf("Math","Literature","Spanish") -> PillColor(text = PinkPillTextColor, background = PinkPillBG)
                 //Orange
