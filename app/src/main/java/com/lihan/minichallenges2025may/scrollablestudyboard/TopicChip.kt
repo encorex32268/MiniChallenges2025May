@@ -1,6 +1,7 @@
 package com.lihan.minichallenges2025may.scrollablestudyboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,7 @@ import com.lihan.minichallenges2025may.ui.theme.MiniChallenges2025MayTheme
 @Composable
 fun TopicChip(
     text: String,
+    onChipClick: () -> Unit = {},
     fontSize: TextUnit = 17.sp,
     color: Color = PrimaryText,
     backgroundColor: Color = Surface,
@@ -31,6 +33,9 @@ fun TopicChip(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(100.dp))
+            .clickable{
+                onChipClick()
+            }
             .background(color = backgroundColor)
             .padding(vertical = 5.dp, horizontal = 12.dp)
         ,
@@ -51,7 +56,7 @@ fun TopicChip(
 @Composable
 private fun TopicChipPreview() {
     MiniChallenges2025MayTheme {
-        TopicChip(text = "Math")
+        TopicChip(text = "Math" , onChipClick = {})
     }
 
 }

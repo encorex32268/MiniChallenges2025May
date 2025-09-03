@@ -60,17 +60,16 @@ class MainActivity : ComponentActivity() {
                         ScrollableStudyBoard(
                             state = state,
                             onAction = { action ->
-                                println("action ${action}")
                                 when(action){
                                     is ScrollableStudyBoardAction.ToDetail -> {
-                                        println("action ToDetail ${action.lessonTopic}")
                                         val lessonTopicString = Json.encodeToString(action.lessonTopic)
                                         navController.navigate(StudyBoardDetail(lessonTopicString = lessonTopicString))
                                     }
                                     else -> Unit
                                 }
                                 viewModel.onAction(action)
-                            }
+                            },
+                            uiEvent = viewModel.uiEvent
 
                         )
 

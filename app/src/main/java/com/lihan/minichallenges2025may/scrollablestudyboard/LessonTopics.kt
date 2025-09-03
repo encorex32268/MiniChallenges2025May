@@ -83,6 +83,8 @@ data class LessonTopic(
     val isPinned: Boolean = false
 )
 
+
+
 val lessonTopics = listOf(
     // Science
     LessonTopic("Photosynthesis Basics", "Science"),

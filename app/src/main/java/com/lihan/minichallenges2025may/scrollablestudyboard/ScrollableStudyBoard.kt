@@ -2,6 +2,7 @@
 
 package com.lihan.minichallenges2025may.scrollablestudyboard
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -22,6 +23,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,10 +55,14 @@ import androidx.compose.ui.unit.sp
 import com.lihan.minichallenges2025may.R
 import com.lihan.minichallenges2025may.ui.montserrat
 import com.lihan.minichallenges2025may.ui.theme.MiniChallenges2025MayTheme
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 val Primary = Color(0xFF6B74F8)
 val Background = Color(0xFFEDEDFC)
@@ -69,10 +77,13 @@ val Icon = Color(0xFF9FA3AF)
 fun ScrollableStudyBoard(
     modifier: Modifier = Modifier,
     state: ScrollableStudyBoardState,
+    uiEvent: Flow<ScrollableStudyBoardUiEvent>,
     onAction: (ScrollableStudyBoardAction) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    val headerHeightPx = with(LocalDensity.current) { 16.dp.toPx() }
     val itemHeight = remember { mutableFloatStateOf(0f) }
     val progress = remember { derivedStateOf {
         val totalItemsCount = listState.layoutInfo.totalItemsCount
@@ -92,30 +103,59 @@ fun ScrollableStudyBoard(
         }
     } }
 
-    var isShowFabButton by remember {
-        mutableStateOf(false)
+    val isShowFabButton by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex >= 10
+        }
     }
-    LaunchedEffect(listState) {
-        // 將 listState 的 firstVisibleItemIndex 轉換成 Flow
-        snapshotFlow { listState.firstVisibleItemIndex }
-            .distinctUntilChanged()
-            .onEach { firstIndex ->
-                isShowFabButton = firstIndex >= 10
+    val isAtBottom by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val lastVisibleItem= layoutInfo.visibleItemsInfo.lastOrNull()?: return@derivedStateOf false
+            (lastVisibleItem.index == layoutInfo.totalItemsCount - 1)
+        }
+    }
+
+    LaunchedEffect(isAtBottom) {
+        if(isAtBottom){
+            println("ScrollEnd")
+            onAction(ScrollableStudyBoardAction.OnScrollEnd)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        uiEvent.collectLatest { uiEvent ->
+            when(uiEvent){
+                ScrollableStudyBoardUiEvent.OnPinLimitWarning -> {
+                    snackbarHostState.showSnackbar("The pin limit is 5.")
+                }
+                ScrollableStudyBoardUiEvent.OnReachingEndWarning ->{
+                    snackbarHostState.showSnackbar("Reaching the end of the list!")
+                }
+                is ScrollableStudyBoardUiEvent.OnHeaderAnimateScrollToItem ->{
+                    scope.launch {
+                        listState.animateScrollToItem(uiEvent.headerIndex,headerHeightPx.roundToInt() )
+                    }
+                }
+                ScrollableStudyBoardUiEvent.OnScrollToTop -> {
+                    scope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                }
             }
-            .launchIn(this)
+        }
     }
+
 
     Scaffold(
         floatingActionButton = {
-            if (isShowFabButton){
+            AnimatedVisibility(visible = isShowFabButton) {
                 FloatingActionButton(
                     modifier = Modifier.size(80.dp),
                     containerColor = HigherSurface,
                     shape = CircleShape,
                     onClick = {
-                        scope.launch {
-                            listState.animateScrollToItem(0)
-                        }
+                        onAction(ScrollableStudyBoardAction.OnScrollToTop)
                     }
                 ) {
                     Icon(
@@ -126,7 +166,10 @@ fun ScrollableStudyBoard(
                     )
                 }
             }
-        }
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
     ) {
         Column(
             modifier = modifier
@@ -139,7 +182,12 @@ fun ScrollableStudyBoard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ){
                 itemsIndexed(state.lessonTopicList.groupByCategoryMapKey()){ index,topicChip  ->
-                    TopicChip(text = topicChip)
+                    TopicChip(
+                        text = topicChip,
+                        onChipClick = {
+                            onAction(ScrollableStudyBoardAction.OnCategoryClick(topicChip))
+                        }
+                    )
                 }
             }
             ScrollProgressBar(
@@ -148,27 +196,41 @@ fun ScrollableStudyBoard(
                     .size(1.dp),
                 progress = { progress.value }
             )
+            //PinedList
+            if (state.lessonTopicList.filterPinList().isNotEmpty()){
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ){
+                    state.lessonTopicList.filterPinList().forEach { lessonTopic ->
+                        TopicsCard(
+                            lessonTopic = lessonTopic,
+                            onPinClick = { pinItem ->
+                                onAction(ScrollableStudyBoardAction.OnPinItem(pinItem))
+                            },
+                            onItemClick = {
+                                onAction(ScrollableStudyBoardAction.ToDetail(lessonTopic))
+                            }
+                        )
+                    }
+                }
+            }
+            val pinListTopPadding = remember(state.lessonTopicList) {
+                if (state.lessonTopicList.filterPinList().isEmpty()){
+                    20.dp
+                }else{
+                    0.dp
+                }
+            }
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(top = 20.dp),
+                modifier = Modifier.fillMaxSize().padding(top = pinListTopPadding),
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(20.dp)
             ){
-                items(state.lessonTopicList.filterPinList()){ lessonTopic ->
-                    TopicsCard(
-                        lessonTopic = lessonTopic,
-                        onPinClick = { pinItem ->
-                            onAction(ScrollableStudyBoardAction.OnPinItem(pinItem))
-                        },
-                        onItemClick = {
-                            println("TopicsCard Pined ${lessonTopic}")
-                            onAction(ScrollableStudyBoardAction.ToDetail(lessonTopic))
-                        }
-                    )
-                }
+                //Science , List<String>(Title)
                 state.lessonTopicList.groupByCategory().forEach { key , value ->
                     val notPinedList =  value.filterNotPinList()
-
                     stickyHeader{
                         Box(
                             modifier = Modifier
@@ -198,7 +260,6 @@ fun ScrollableStudyBoard(
                                 onAction(ScrollableStudyBoardAction.OnPinItem(pinItem))
                             },
                             onItemClick = {
-                                println("TopicsCard  ${lessonTopic}")
                                 onAction(ScrollableStudyBoardAction.ToDetail(lessonTopic))
                             }
                         )
@@ -242,7 +303,8 @@ private fun ScrollableStudyBoardPreview() {
             state = ScrollableStudyBoardState(
                 lessonTopics
             ),
-            onAction = {}
+            onAction = {},
+            uiEvent = flow {  }
         )
     }
 
